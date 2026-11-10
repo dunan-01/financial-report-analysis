@@ -1,0 +1,25 @@
+# 本机设置与缓存
+.DS_Store
+.vscode/
+.idea/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+.~*
+~$*
+
+# 密钥与本地环境（仅提交脱敏示例）
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.aws/
+
+# 运行产物和源数据快照
+financial-report-analysis/agentscope_demo/audit/
+financial-report-analysis/agentscope_demo/reports/
+financial-report-analysis/agentscope_demo/mock_api_payload.json
+*.log
