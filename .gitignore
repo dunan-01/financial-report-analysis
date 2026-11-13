@@ -23,3 +23,10 @@ financial-report-analysis/agentscope_demo/audit/
 financial-report-analysis/agentscope_demo/reports/
 financial-report-analysis/agentscope_demo/mock_api_payload.json
 *.log
+
+# 当前目录结构的运行输出
+agentscope_demo/reports/
+agentscope_demo/audit/
+agentscope_demo/web_runs/
+
+agentscope_demo/runs/

@@ -8,12 +8,13 @@ risk_level: high
 version: 2.0.0
 status: draft
 data_sources:
-  - MySQL财务原始科目库(当前Demo由MOCK_CREDIT_SYSTEM_API模拟接口写入；生产环境替换为信贷系统真实接口入库)
-  - 字段代码依据财报字段映射表_D_E合并JSON.xlsx的“财务指标映射”和“系统字段字典”
-  - 真实数据需记录company_id、report_period、field_code、field_name、amount、source_system、source_record_id、is_audited
-  - 行业基准、审计意见、报表附注等仅在对应数据接口接入后使用，不得默认存在
-upstream_skills: ["credit-due-diligence"]
-downstream_skills: ["submit-credit-application"]
+  - 统一接口 data_provider.get_financial_data(company_id, company_name)（当前 mock）
+  - 用户提交材料及管道传入的必需上游报告
+upstream_skills:
+  - equity-penetration-analysis
+downstream_skills:
+  - credit-related-party-detection
+  - credit-risk-extraction
 ---
 
 # 财务报表深度分析
@@ -21,27 +22,27 @@ downstream_skills: ["submit-credit-application"]
 
 ## AgentScope 数据接入与工具调用（本 Demo 实际执行规范）
 
-本技能通过 `agentscope_demo/` 中的 AgentScope `ReActAgent` 执行。企业财务数据不再假定只能由用户上传文件取得；当前 Demo 的数据源为 MySQL 财务原始科目表，Mock 信贷系统接口只负责生成并入库演示数据。
+本技能通过 `agentscope_demo/` 中的 AgentScope Agent 执行。企业财务数据不再假定只能由用户上传文件取得；当前 Demo 的数据源为 `data_provider` 统一数据层，内部通过 `mock_source` 生成虚拟演示数据，接入真实接口时只需替换 `data_provider.get_financial_data` 实现。
 
 ### 输入参数
-- `company_id`：必需，信贷系统中的企业唯一 ID，用于数据库查询；不得用企业名称替代。
+- `company_id`：必需，信贷系统中的企业唯一 ID，用于数据查询；不得用企业名称替代。
 - `report_period`：必需，年度报告期，例如 `2025`。
 - `company_name`：报告展示名称。
 - `analysis_scenario`：贷前尽调/贷后检视/风险预警。
 - `operator`：操作人标识。
 
-### 数据库来源及字段映射
-- MySQL 表：`companies` 保存企业主数据；`financial_statement_values` 保存按企业、报告期、系统字段代码存储的原始科目；`data_source_events` 保存入库批次来源；`analysis_runs` 保存运行状态。
-- 查询条件：`company_id` + `report_period`；为了趋势分析，工具会取该企业已入库的历史年度，再由 Agent 选择目标年度和历史年度进行比较。
+### 数据来源及字段映射
+- 数据通过 `data_provider.get_financial_data(company_id)` 统一获取，当前使用 `mock_source` 内部生成虚拟数据，生产环境替换为真实接口调用。
+- 返回结构包含 `company` 企业信息和 `records` 财务科目记录列表；查询条件为 `company_id`，支持多年度趋势分析。
 - 字段代码：严格使用 Excel 中的详细字段代码（如 `SY02`、`ZCFZ38`、`XJ25`、`ANNEX13`）。财务简表代码（如 `B-SYJB02`）单独保留，不与详细代码混用。
 - 原始字段的来源系统、来源记录 ID、审计标志随查询结果传递，技术来源信息在审计日志留存；客户经理报告只保留业务来源名称、报告期和审计状态。
 
 ### AgentScope 注册工具
-1. `query_financial_data(report_period)`：从 MySQL 读取原始科目；Agent 必须先调用该工具。
+1. `query_financial_data(report_period)`：查询已获取的财务原始科目；Agent 必须先调用该工具。
 2. `calculate_financial_indicators(report_period)`：使用 `agentscope_demo/tools/indicator_calculator.py` 内置公式计算指标；实际计算规则以该 Python 工具为准，`references/financial-indicators-calculation.md` 为方法参考，字段映射 JSON 不保存或执行公式。模型必须依据工具返回的数值和口径说明，不得凭空心算或修改公式；公式和字段代码仅供内部使用，不写入客户经理报告。
 3. `get_data_quality_summary(report_period)`：检查核心字段覆盖、来源系统、审计标志和待确认口径。
 
-AgentScope 的 `Toolkit` 注册上述工具，`ReActAgent` 按本节要求自主调用。数据库连接、SQL、字段映射和计算均封装在工具层，模型只接收工具返回的数据。
+AgentScope 的 `Toolkit` 注册上述工具，Agent 按本节要求自主调用。数据获取、字段映射和计算均封装在工具层，模型只接收工具返回的数据。
 
 ### 数据缺失与口径约束
 - 所有指标按实际字段可用性计算；任一必要原始字段缺失、分母为零或口径不满足时，状态为 `unavailable`，不得将缺失值默认为零。
@@ -52,7 +53,7 @@ AgentScope 的 `Toolkit` 注册上述工具，`ReActAgent` 按本节要求自主
 - 行业均值、审计意见、附注、账龄、前五大客户/供应商、商誉减值测试等未在当前Excel字段映射中提供；未接入前只能标注数据缺口，不得生成相关事实判断。
 
 ### 审计追踪
-每次执行至少记录：run_id、company_id、report_period、analysis_scenario、operator、开始/结束时间、模式/模型、查询字段记录数、source_system、source_record_id、工具调用事件、映射配置版本、报告路径、warnings。审计日志写入 `agentscope_demo/audit/`，运行状态同步写入 MySQL `analysis_runs`。
+  每次执行至少记录：run_id、company_id、report_period、analysis_scenario、operator、开始/结束时间、模式/模型、查询字段记录数、source_system、source_record_id、工具调用事件、映射配置版本、报告路径、warnings。审计日志写入 `agentscope_demo/audit/`。
 
 ## 目标角色
 
@@ -67,7 +68,7 @@ AgentScope 的 `Toolkit` 注册上述工具，`ReActAgent` 按本节要求自主
 ### 必需数据
 | 数据项 | 来源 | 获取方式 | 敏感级别 |
 |--------|------|---------|----------|
-| 财务报表三表原始科目 | MySQL financial_statement_values（当前由Mock接口入库） | query_financial_data(company_id, report_period) | 内部 |
+| 财务报表三表原始科目 | 信贷系统财务数据接口（当前由mock_source模拟生成） | query_financial_data(company_id, report_period) | 内部 |
 | 报表附注 | 当前未接入数据库字段 | 后续增加附注接口/表后查询 | 内部 |
 | 审计报告 | 当前未接入数据库字段 | 后续增加审计报告接口/表后查询 | 内部 |
 | 行业财务基准 | Wind/同花顺 | 接口/数据订阅 | 公开 |
@@ -101,7 +102,7 @@ AgentScope 的 `Toolkit` 注册上述工具，`ReActAgent` 按本节要求自主
 - ✅ 验证通过 → 进入步骤 1
 - ❌ 验证失败 → 返回缺失清单,要求用户补充(如"请提供2021-2023年完整三表")
 
-> 📋 数据来源:`MySQL financial_statement_values`(按企业ID查询原始科目)
+> 📋 数据来源:信贷系统财务数据接口(按企业ID查询原始科目)
 
 ### 步骤 1:数据收集与质量评估
 
@@ -122,7 +123,7 @@ AgentScope 的 `Toolkit` 注册上述工具，`ReActAgent` 按本节要求自主
 - ⚠️ 部分缺失 → 标注缺失项,继续分析但降低置信度
 - ❌ 数据严重缺失(仅1年或缺少核心报表) → 输出"数据不足,无法完成分析"报告
 
-> 📋 数据来源:`MySQL financial_statement_values`；若审计意见/附注/行业基准字段未接入，标注缺失
+> 📋 数据来源:信贷系统财务数据接口；若审计意见/附注/行业基准字段未接入，标注缺失
 
 ### 步骤 2:盈利能力深度分析
 
@@ -146,7 +147,7 @@ AgentScope 的 `Toolkit` 注册上述工具，`ReActAgent` 按本节要求自主
 - ✅ 数据完整 → 进入步骤 3
 - ⚠️ 部分数据缺失 → 标注"某指标无法计算",继续分析
 
-> 📋 数据来源:`MySQL query_financial_data`工具返回的原始科目与计算指标
+> 📋 数据来源:`query_financial_data`工具返回的原始科目与计算指标
 
 ### 步骤 3:资产负债表深度分析
 
@@ -172,7 +173,7 @@ AgentScope 的 `Toolkit` 注册上述工具，`ReActAgent` 按本节要求自主
 - ✅ 数据完整 → 进入步骤 4
 - ⚠️ 附注缺失 → 标注"附注未提供,部分科目明细无法核实"
 
-> 📋 数据来源:`MySQL query_financial_data`工具返回的原始科目与计算指标
+> 📋 数据来源:`query_financial_data`工具返回的原始科目与计算指标
 
 ### 步骤 4:现金流深度分析
 
@@ -197,7 +198,7 @@ AgentScope 的 `Toolkit` 注册上述工具，`ReActAgent` 按本节要求自主
 - ✅ 数据完整 → 进入步骤 5
 - ⚠️ 现金流量表缺失 → 标注"现金流量表未提供,无法分析现金流质量"
 
-> 📋 数据来源:`MySQL query_financial_data`工具返回的原始科目与计算指标
+> 📋 数据来源:`query_financial_data`工具返回的原始科目与计算指标
 
 ### 步骤 5:杜邦分析与驱动力拆解
 
@@ -221,7 +222,7 @@ ROE = 税负系数 × 利息负担系数 × 经营利润率 × 资产周转率 �
 - ✅ 数据完整 → 进入步骤 6
 - ⚠️ 部分数据缺失 → 标注"某因素无法拆解",继续分析
 
-> 📋 数据来源:`MySQL query_financial_data`工具返回的原始科目与计算指标
+> 📋 数据来源:`query_financial_data`工具返回的原始科目与计算指标
 
 ### 步骤 6:财务预警与粉饰识别
 
@@ -250,7 +251,7 @@ ROE = 税负系数 × 利息负担系数 × 经营利润率 × 资产周转率 �
 - ⚠️ 触发1-2条红线 → 标注红色警示,继续分析
 - ❌ 触发3条以上红线 → 标注"建议暂停授信决策",进入步骤 7
 
-> 📋 数据来源:`MySQL query_financial_data`工具返回的原始科目与计算指标
+> 📋 数据来源:`query_financial_data`工具返回的原始科目与计算指标
 
 ### 步骤 7:估值参考(如需要)
 
@@ -277,7 +278,7 @@ ROE = 税负系数 × 利息负担系数 × 经营利润率 × 资产周转率 �
 - ✅ 勾稽关系一致 → 进入步骤 9
 - ❌ 勾稽关系不一致 → 标注不一致项,要求用户核实
 
-> 📋 数据来源:`MySQL query_financial_data`工具返回的原始科目与计算指标
+> 📋 数据来源:`query_financial_data`工具返回的原始科目与计算指标
 
 ### 步骤 9:生成财务分析报告
 
@@ -400,14 +401,14 @@ ROE = 税负系数 × 利息负担系数 × 经营利润率 × 资产周转率 �
     {
       "step": "数据确认与验证",
       "executor": "ai",
-      "data_source": {"type": "MySQL", "table": "financial_statement_values", "company_id": "DEMO001", "report_period": "2023"},
+      "data_source": {"type": "API", "endpoint": "get_financial_data", "company_id": "DEMO001", "report_period": "2023"},
       "result": "pass",
       "validation_script": "validate_financial_report.py"
     },
     {
       "step": "数据收集与质量评估",
       "executor": "ai",
-      "data_source": {"type": "MySQL", "table": "financial_statement_values", "company_id": "DEMO001", "report_period": "2023"},
+      "data_source": {"type": "API", "endpoint": "get_financial_data", "company_id": "DEMO001", "report_period": "2023"},
       "result": "pass",
       "audit_opinion": "标准无保留意见"
     },
@@ -530,7 +531,7 @@ XX贸易公司近期有逾期记录,请分析其2023年财报,评估风险。
 
 ## 非功能范围
 
-- 本技能通过数据库 Tool 查询已入库财务原始科目；不在没有数据接口的情况下自行抓取外部数据。
+- 本技能通过 data_provider 获取财务原始科目；当前使用 mock 数据，生产环境通过真实接口获取。
 - 本 技能 不处理授信审批决策,仅提供财务分析数据支撑
 - 本 技能 不生成授信申请报告(请使用 授信申请提交 技能)
 - 本 技能 不直接修改客户数据或提交授信申请
@@ -540,3 +541,10 @@ XX贸易公司近期有逾期记录,请分析其2023年财报,评估风险。
 - 如果用户请求以上内容,明确告知并建议合适的 技能 或联系相应部门
 
 ---
+
+## 当前 Demo 接入与编排
+
+本技能通过 `agentscope_demo/data_provider.py` 的 `get_financial_data` 获取模拟接口数据；
+模型不直接联网查询原业务数据源。生产接入时替换该接口实现，保留字段契约和不可用状态。
+上游依赖以 `orchestration/analysis_pipeline.py` 顶部的 `NODES` 为准，按本次流程图执行；上游报告作为分析材料传入，不能冒充已核验事实。
+独立调用本技能时直接使用用户材料，不自动执行上下游。模拟数据不能表述为实时政策、征信或视觉核验成功。
