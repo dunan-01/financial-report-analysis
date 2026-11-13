@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>企业调查工作台</title><link rel="stylesheet" href="/app.css"><script defer src="/app.js"></script></head>
+<body>
+<header><a class="brand" href="/">研<span>信</span><i>企业调查工作台</i></a><span class="local"><b></b>本地工作空间</span></header>
+<main>
+<section class="intro"><div class="eyebrow">CORPORATE INVESTIGATION</div><h1>从企业信息，开始一次完整调查。</h1><p>9 个技能按上下游依赖并行与串行执行，汇集为完整调查报告。</p></section>
+<div class="workflow-phase" aria-label="调查阶段"><span id="phase-input" class="active">01 调查录入</span><span id="phase-execution">02 流程执行</span><span id="phase-report">03 报告交付</span></div>
+<div class="workspace">
+<section class="panel form-panel" aria-labelledby="form-title">
+<div class="section-heading"><span class="step">01</span><div><h2 id="form-title">调查信息</h2><p>填写本次调查的企业与业务背景</p></div></div>
+<form id="investigation-form">
+<label for="company-id">企业 ID <em>必填</em></label><input id="company-id" name="company_id" placeholder="例如 DEMO001" required maxlength="64" pattern="[A-Za-z0-9_-]+" autocomplete="off"><small>企业唯一标识，支持字母、数字、下划线和连字符</small>
+<label for="company-name">企业名称 <span>选填</span></label><input id="company-name" name="company_name" placeholder="输入企业全称" maxlength="200" autocomplete="organization">
+<div class="pair"><div><label for="period">财报年度 <em>必填</em></label><input id="period" name="report_period" placeholder="例如 2025" required pattern="[0-9]{4}" maxlength="4" inputmode="numeric"></div><div><label for="scenario">调查场景 <em>必填</em></label><select id="scenario" name="scenario"><option>贷前尽调</option><option>贷中监控</option><option>贷后检视</option><option>风险预警</option></select></div></div>
+<label for="operator">操作人 <em>必填</em></label><input id="operator" name="operator" placeholder="姓名或工号" required maxlength="200" autocomplete="name">
+<label for="user-materials">用户材料 <span>选填</span></label><textarea id="user-materials" name="user_materials" maxlength="10000" rows="4" placeholder="填写企业背景、已有材料摘要或目标风险点"></textarea>
+<fieldset><legend>执行方式</legend><label class="choice"><input type="radio" name="mode" value="agentscope" checked><span><strong>智能体调查</strong><small>按依赖运行全部 9 个技能 Agent</small></span></label><label class="choice"><input type="radio" name="mode" value="offline"><span><strong>离线预览</strong><small>无需模型密钥，预览模拟数据报告</small></span></label></fieldset>
+<button class="primary" id="start-button" type="submit">开始调查 <span aria-hidden="true">↗</span></button>
+<p class="error" id="form-error" role="alert" hidden></p>
+</form><p class="data-note">当前为模拟业务数据，财报年度支持 2022—2025。征信系统尚未接入。</p>
+</section>
+<section class="panel result-panel" aria-labelledby="result-title">
+<div class="section-heading"><span class="step">02</span><div><h2 id="result-title">调查结果</h2><p>任务进展与报告将在这里呈现</p></div><span class="badge" id="status-badge">待开始</span></div>
+<div id="empty-state" class="empty"><div class="document-icon" aria-hidden="true">≡</div><h3>准备好了解这家企业了吗？</h3><p>填写左侧信息并开始调查。<br>完成后可在这里查看、下载全部技能报告。</p><div class="capabilities"><span>财报分析</span><span>关联交易排查</span></div></div>
+<div id="job-state" class="job-state" hidden aria-live="polite"><div class="activity" id="activity"></div><h3 id="job-title"></h3><p id="job-message"></p><small id="job-reference"></small><button type="button" id="retry-status" class="secondary" hidden>重新检查进度</button></div>
+<div id="investigation-overview" class="investigation-overview" hidden><strong id="investigation-company"></strong><span id="investigation-context"></span><span class="connection" id="event-connection">连接实时事件中</span><span id="event-freshness"></span></div>
+<section id="live-workspace" class="live-workspace" hidden aria-label="实时调查进度">
+<div class="live-column"><h3>智能体流水线</h3><div id="agent-list"></div><p class="live-note" id="workflow-note">全部智能体按依赖执行<br>状态来自实际执行事件</p></div>
+<div class="live-column"><h3 id="agent-detail-title">智能体执行详情</h3><p id="agent-summary" class="live-note"></p><ol id="agent-steps" class="agent-steps"></ol></div>
+<div class="live-column audit-column"><h3>审计日志 <span id="elapsed"></span></h3><div class="audit-toolbar"><label for="audit-scope">查看范围</label><select id="audit-scope"><option value="selected">当前智能体</option><option value="all">全部调查</option></select><a id="audit-download" download="调查审计.json" hidden>导出审计</a></div><div id="execution-log" class="execution-log" role="log" aria-live="polite" tabindex="0" aria-label="审计日志，可滚动查看"></div></div>
+</section>
+<div id="report-actions" class="report-actions" hidden><a id="open-report" class="secondary" target="_blank" rel="noopener">打开合并报告 ↗</a><a id="financial-download" download="财报分析.md">下载财报 Markdown</a><a id="related-download" download="关联交易.md">下载关联交易 Markdown</a></div>
+<div id="all-downloads" class="report-actions" hidden></div>
+<iframe id="report-preview" title="财报与关联交易合并报告预览" sandbox="allow-scripts" hidden></iframe>
+</section>
+</div>
+<footer><span>企业调查 · 分析辅助</span><span>调查结果仅供参考，不替代授信审批。</span></footer>
+</main>
+</body></html>

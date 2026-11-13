@@ -1,0 +1,10 @@
+# AgentScope 2.x：使用官方 2.0.11 API，避免与 1.x API 混用
+agentscope[full]==2.0.11
+python-dotenv>=1.0.0
+pandas>=2.0.0
+openpyxl>=3.1.0
+pytest>=8.0.0
+markdown-it-py>=3.0.0,<5.0.0
+
+# 步骤响应语法容错（仍执行严格业务字段校验）
+json-repair>=0.63.4,<1.0
